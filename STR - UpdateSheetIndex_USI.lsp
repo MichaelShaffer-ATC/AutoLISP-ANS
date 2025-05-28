@@ -8,8 +8,8 @@
 	(
 		/
 		;Functions
-		*error* ClearTableObject MappedLayoutList GetTitleBlock ReturnAttributeValue
-		GetSummaryInfo GetCustomProperty SetCustomProperty FormatDate
+		*error* ClearTableObject MappedLayoutList
+		GetTitleBlock ReturnAttributeValue FormatDate
 		;Variables
 		tbl row tblk ttl flg dwgps rev date
 	)
@@ -59,34 +59,6 @@
 	)
 	;; RETURNS ATTRIBUTE VALUE OF PASSED STRING (STR) IN PASSED BLOCK OBJECT (BLK) IF IT EXISTS
 	
-	(defun GetSummaryInfo ( / )
-		(vla-get-summaryinfo (vla-get-activedocument (vlax-get-acad-object)))
-	)
-	;; RETURNS ACTIVE DRAWINGS SUMMARY INFORMATION (DRAWING PROPERTIES)
-	
-	(defun GetCustomProperty ( dwgp key / ret )
-		(vl-catch-all-apply
-			'vla-GetCustomByKey
-			(list dwgp key 'ret)
-		)
-		ret
-	)
-	;; GETS CUSTOM DRAWING PROPERTY VALUE FROM KEY IF IT EXISTS
-	;; RETURNS VALUE OF KEY IF FOUND ELSE NIL
-	
-	(defun SetCustomProperty ( dwgp key ret )
-		(not
-			(vl-catch-all-error-p
-				(vl-catch-all-apply
-					'vla-SetCustomByKey
-					(list dwgp key ret)
-				)
-			)
-		)
-	)
-	;; FILLS DRAWING PROPERTIES SUMMARY VALUES BASED ON KEY VALUE IF FOUND
-	;; RETURNS T IF SUCCESSFUL (NO ERROR CATCH) ELSE NIL
-	
 	(defun FormatDate ( dtnum frmt )
 		(setq dtnum (itoa dtnum))
 		(cond
@@ -107,26 +79,20 @@
 			(not (vl-catch-all-error-p (vl-catch-all-apply 'ClearTableObject (list tbl (setq row 2)))))
 		)
 		(progn
-			(if (setq flg (= (vla-get-columns tbl) 4))
-				(progn
-					(setq dwgps (GetSummaryInfo))
-					(setq rev (GetCustomProperty dwgps "Revision Number"))
-					(setq date (FormatDate (fix (getvar "CDATE")) "MM/DD/YYYY"))
-				)
-			) ;; TABLE IS EQUAL TO 4 COLUMNS
+			(setq flg (= (vla-get-columns tbl) 4)) ;; TABLE IS EQUAL TO 4 COLUMNS
 			(foreach lyt (MappedLayoutList)
 				(vla-insertrows tbl (1+ row) 0.4013 1)
 				(vla-settext tbl row 0 (car lyt))
 				(if (setq tblk (GetTitleBlock (car lyt)))
-					(vla-settext tbl row 1 (if (null (setq ttl (ReturnAttributeValue (GetTitleBlock (car lyt)) "SHEET_TITLE"))) "XXXXX" ttl))
+					(vla-settext tbl row 1 (if (null (setq ttl (ReturnAttributeValue tblk "SHEET_TITLE"))) "XXXXX" ttl))
 					(vla-settext tbl row 1 "XXXXX") ;; TITLE BLOCK NOT FOUND
 				)
-				(if flg
+				(if (and flg tblk)
 					(progn
-						(vla-settext tbl row 2 rev)
-						(vla-settext tbl row 3 date)
+						(vla-settext tbl row 2 (ReturnAttributeValue tblk "REV"))
+						(vla-settext tbl row 3 (FormatDate (fix (getvar "CDATE")) "MM/DD/YYYY"))
 					)
-				)
+				) ;; SKIPPED IF TITLE BLOCK IS NOT FOUND OR IF 'flg' IS NOT SET
 				(setq row (1+ row))
 			)
 			(prompt "\n'Drawing Set List' table not found.")
