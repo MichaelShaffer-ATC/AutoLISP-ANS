@@ -44,7 +44,10 @@
 	;; RETURNS TITLE BLOCK OBJECT BASSED ON PASSED STRING "SHT"
 	
 	(defun ReturnAttributeValue ( blk str )
-		(if (eq (type blk) 'VLA-OBJECT)
+		(if (and
+				(eq (type blk) 'VLA-OBJECT)
+				(eq :vlax-true (vla-get-hasattributes blk))
+			)
 			(car
 				(vl-remove 'nil
 					(mapcar
@@ -59,11 +62,11 @@
 	)
 	;; RETURNS ATTRIBUTE VALUE OF PASSED STRING (STR) IN PASSED BLOCK OBJECT (BLK) IF IT EXISTS
 	
-	(defun FormatDate ( dtnum frmt )
-		(setq dtnum (itoa dtnum))
+	(defun FormatDate ( dte fmt )
+		(setq dte (itoa dte))
 		(cond
-			((eq frmt "MM/DD/YYYY") ;; "20250519"
-				(strcat (substr dtnum 5 2) "/" (substr dtnum 7 2) "/" (substr dtnum 1 4))
+			((eq fmt "MM/DD/YYYY") ;; "20250519"
+				(strcat (substr dte 5 2) "/" (substr dte 7 2) "/" (substr dte 1 4))
 			) ;; "05/19/2025"
 			( t
 				(prompt "\nInvalid format.")
@@ -71,7 +74,10 @@
 		)
 	)
 	;; FORMATS THE INTEGER VALUE FOR NUM INTO A STRING VALUE IN SPECIFIED FORMAT
+	;;;BOOKMARK;;;
+	;; DATE NEEDS TO BE ADDED FROM USER BASED ON DELIVERABLE DATE AND CAN VARY BASED ON PROJECT
 	
+	(vl-load-com)
 	
 	(if (and
 			(setq tbl (ssget "_X" (list (cons 0 "ACAD_TABLE") (cons 1 "*DRAWING SET LIST*"))));"{\\fArial|b1|i0|c0|p34;DRAWING SET LIST}"
@@ -89,8 +95,10 @@
 				)
 				(if (and flg tblk)
 					(progn
-						(vla-settext tbl row 2 (ReturnAttributeValue tblk "REV"))
-						(vla-settext tbl row 3 (FormatDate (fix (getvar "CDATE")) "MM/DD/YYYY"))
+						(setq rev (ReturnAttributeValue tblk "REV"))
+						(setq date (FormatDate (fix (getvar "CDATE")) "MM/DD/YYYY")) ;;;BOOKMARK;;; ;; NEEDS TO BE UPDATED TO USER DEFINED DATE
+						(if (not (null rev)) (vla-settext tbl row 2 rev))
+						(if (not (null date)) (vla-settext tbl row 3 date))
 					)
 				) ;; SKIPPED IF TITLE BLOCK IS NOT FOUND OR IF 'flg' IS NOT SET
 				(setq row (1+ row))

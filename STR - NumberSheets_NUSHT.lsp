@@ -47,7 +47,7 @@
 		(prompt "\nError: Proper title block not found.")
 		(mapcar
 			'(lambda ( blk )
-				(ReplaceAttributeValue blk "SHEET" (vla-get-taborder (ReturnLayoutFromCollection (ReturnBlockLayoutName blk))))
+				(ReplaceAttributeValue blk "SHT" (vla-get-taborder (ReturnLayoutFromCollection (ReturnBlockLayoutName blk))))
 			)
 			(mapcar 'vlax-ename->vla-object (mapcar 'cadr (ssnamex sel)))
 		)

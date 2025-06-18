@@ -24,6 +24,8 @@
 		  	(vla-put-layeron lyr (if (eq (vla-get-layeron lyr) :vlax-true) :vlax-false :vlax-true))
 		)
 	)
+	
+	(vl-load-com)
 
   	(while (= (strlen (setq lyrname (RemoveWhiteSpaceEnds (getstring "Enter layer name: " 1)))) 0)
 	  	(princ "\nLayer name cannot be blank.\n")
