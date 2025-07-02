@@ -4,7 +4,7 @@
 	(c:NUMBERSHEETS)
 )
 
-(defun c:NUMBERSHEETS ( / *error* ReplaceAttributeValue ReturnBlockLayoutName ReturnLayoutFromCollection sel )
+(defun c:NUMBERSHEETS ( / *error* ReplaceAttributeValue ReturnBlockLayoutName ReturnLayoutFromCollection ReturnCustomProperty SetCustomProperty sel )
 	
 	(defun *error* ( msg )
 		(if (not (member msg (list "Function cancelled" "quit / exit abort")))
@@ -42,16 +42,40 @@
 	)
 	;; RETRIEVES A LAYOUT OBJECT FROM A COLLECTION OF LAYOUTS BASED ON PASSED STRING FOR THE LAYOUT NAME (KEY)
 	
+	(defun ReturnCustomProperty ( key / ret )
+		(vl-catch-all-apply
+			'vla-GetCustomByKey
+			(list (vla-get-summaryinfo (vla-get-activedocument (vlax-get-acad-object))) key 'ret)
+		)
+		ret
+	)
+	;; RETURNS CUSTOM PROPERTY KEY VALUE IF KEY EXISTS, ELSE NIL
+	
+	(defun SetCustomProperty ( key val )
+		(vl-catch-all-error-p
+			(vl-catch-all-apply
+				'vla-SetCustomByKey
+				(list (vla-get-summaryinfo (vla-get-activedocument (vlax-get-acad-object))) key val)
+			)
+		)
+	)
+	;; SETS THE CUSTOM PROPERTY KEY TO A SPECIFIED VALUE (VAL) IF KEY EXISTS AND RETURNS T, ELSE NIL
+	
 	
 	(if (null (setq sel (ssget "_X" (list (cons 0 "INSERT") (cons 2 "*Title Block*")))))
 		(prompt "\nError: Proper title block not found.")
-		(mapcar
-			'(lambda ( blk )
-				(ReplaceAttributeValue blk "SHT" (vla-get-taborder (ReturnLayoutFromCollection (ReturnBlockLayoutName blk))))
+		(progn
+			(mapcar
+				'(lambda ( blk )
+					(ReplaceAttributeValue blk "SHT" (vla-get-taborder (ReturnLayoutFromCollection (ReturnBlockLayoutName blk))))
+				)
+				(mapcar 'vlax-ename->vla-object (mapcar 'cadr (ssnamex sel)))
 			)
-			(mapcar 'vlax-ename->vla-object (mapcar 'cadr (ssnamex sel)))
+			(SetCustomProperty "Total Sheets" (itoa (1- (vla-get-count (vla-get-layouts (vla-get-activedocument (vlax-get-acad-object)))))))
+			(vl-cmdf "REGEN")
 		)
 	)
 	
 	(princ)
+	
 )
