@@ -10,7 +10,8 @@
 		/
 		;Functions
 		*error*
-		GetSysVariables SetSysVariables Create2DCoordinateList
+		GetSysVariables SetSysVariables
+		Create2DCoordinateList ObjectZoomFromEntity
 		;Variables
 		doc svardef curr
 		lin_type cir_type lin_lyr cir_lyr
@@ -47,6 +48,13 @@
 		)
 	)
 	;; TAKES A FLAT LIST AND CONVERTS IT INTO 2D COORDINATES
+	
+	(defun ObjectZoomFromEntity ( ent / obj ll ur )
+		(setq obj (if (eq (type ent) 'ENAME) (vlax-ename->vla-object ent) ent))
+		(vla-getboundingbox obj 'll 'ur)
+		(vla-zoomwindow (vlax-get-acad-object) ll ur)
+	)
+	;; ZOOMS THE CURRENT VIEW TO A PASSED ENTITY OBJECT
 	
 	(setq doc (vla-get-activedocument (vlax-get-acad-object)))
 	(vla-startundomark doc)
@@ -88,6 +96,7 @@
 
 	(if (setq lins (ssget "X" (list (cons 0 "LWPOLYLINE") (cons 410 "Model") (cons 8 lin_lyr))))
 		(progn
+			(ObjectZoomFromEntity (car cir_type)) ;; ZOOM VIEW FOR CONSISTENT BEHAVIOR
 			(setq lins (mapcar 'vlax-ename->vla-object (mapcar 'cadr (ssnamex lins))))
 			(SetSysVariables svardef) ;; SETS SYSTEM VARIABLES TO DEFINED VALUES WITHIN 'SVARDEF'
 			(foreach lin lins
@@ -106,11 +115,13 @@
 			(foreach cir cirs
 				(vla-highlight cir :vlax-true)
 			)
-			(princ (strcat "\nFound " (itoa (length cirs)) " hits in model."))
+			(vla-zoomprevious (vlax-get-acad-object))
+			(princ (strcat "\nFound " (itoa (length cirs)) " hits in model. Use 'REGEN' to remove highlights."))
 		)
 	)
 	(if curr
 		(SetSysVariables curr)
 	)
+	(vla-endundomark doc)
 	(princ)
 )
