@@ -2,6 +2,8 @@
 ;; USER IS ABLE TO SELECT SPECIFIC SHEETS FOR INSTANCES WHERE REVISIONS ONLY APPLY TO SPECIFIC SHEETS AND NOT THE WHOLE PROJECT
 ;; UPDATED CODE: IF PREVIOUS REVISION WAS ALPHABETIC AND NEW REVISION IS NUMERIC, CLEAR ALL PREVIOUS REVISIONS
 ;; ADDED ADDITIONAL REVISION VALUES AND CONSOLIDATED EXISTING CODE
+;; UPDATED: 09/30/25 REMOVED 'APR' VARIABLE AND 'APPROVED_' REFERENCES DUE TO TITLE BLOCK UPDATE NO LONGER NEEDING THESE VALUES
+;; CHANGED ATTRIBUTES TO SHOW '_REV' IN ADDITION TO 'REV' WITHIN THE TITLE BLOCK. CODE HAS BEEN UPDATED TO CHANGE BOTH LOCATIONS.
 
 (defun c:REVX
 	(
@@ -14,7 +16,7 @@
 		;DCL Functions
 		DCL:RunDialogChecks DCL:LayoutList DCL:Cancel DCL:SelectAll
 		;DCL (Global Variables)
-		ttl dcl tmp des dch lyts res rev date desc apr clr
+		ttl dcl tmp des dch lyts res rev date desc clr
 		;Variables
 		tblks
 	)
@@ -235,18 +237,13 @@
 			"				: edit_box {"
 			"					key = \"desc\";"
 			"					label = \"Description:\";"
-			"					edit_limit = 20;"
-			"					value = \"20 CHARACTERS MAX.\";"
+			"					edit_limit = 32;"
+			"					value = \"32 CHARACTERS MAX.\";"
 			"				}"
 			"				: edit_box {"
 			"					key = \"date\";"
 			"					label = \"Revision Date:\";"
 			"					value = \"mm/dd/yy\";"
-			"				}"
-			"				: edit_box {"
-			"					key = \"apr\";"
-			"					label = \"Approved By:\";"
-			"					value = \"XXX\";"
 			"				}"
 			"			}"
 			"		}"
@@ -282,7 +279,6 @@
 						(setq 
 							date (get_tile "date")
 							desc (strcase (get_tile "desc"))
-							apr (strcase (get_tile "apr"))
 							rev (substr rev (strlen rev) 1) ;; RETURNS THE LAST CHARACTER VALUE OF KEY ("revA" -> "A") ;; BASED ON HARDCODED VALUE IN DCL CODE
 							clr (if (= (get_tile "clr") "1") t nil)
 						)
@@ -298,14 +294,14 @@
 								(if tblks
 									(progn
 										(if (or clr (not (apply '= (append (list (type (read rev))) (mapcar 'GetRevisionType tblks))))) ;; CHECKS AGAINST PREVIOUS REVISIONS OR MISALIGNED REVISION VALUES ON ALL LAYOUTS
-											(mapcar '(lambda ( tag ) (ClearAttributeValues tblks tag)) (list "APPROVED_" "DESCRIPTION_" "DATE_"))
+											(mapcar '(lambda ( tag ) (ClearAttributeValues tblks tag)) (list "REV_" "DESCRIPTION_" "DATE_"))
 										) ;; CLEAR ALL OTHER REVISION VALUES IF "CLR" IS TOGGLED OR IF NEW REVISION TYPE DOES NOT MATCH THE LATEST EXISTING REVISION TYPE ("A" 'SYM -> "0" 'INT)
 										(mapcar '(lambda ( blk ) (ReplaceAttributeValue "REV" rev blk)) tblks)
 										;; QUICK FIX TO ALLOW FOR REVISION UPDATE IN OLDER TITLE BLOCK
 										(UpdateTitleBlockAttributes
 											tblks
 											(list
-												(cons "APPROVED_" apr)
+												(cons "REV_" rev)
 												(cons "DESCRIPTION_" desc)
 												(cons "DATE_" date)
 											)
