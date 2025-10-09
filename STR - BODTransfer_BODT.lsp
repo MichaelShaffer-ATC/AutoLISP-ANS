@@ -14,7 +14,7 @@
 		/
 		;Functions
 		*error*
-		ConvertNumberToString CreateDataMatrix
+		ConvertValueToString SafeConcatenate CreateDataMatrix
 		FindText ReplaceTextInString GenerateKeyPattern
 		;Variables
 		dir fl nms shts txt
@@ -28,9 +28,7 @@
 		)
 		;; !!MAKE SURE TO RELEASE ALL EXCEL RELATED OBJECTS!!
 		(ObjectRelease (list rgx cell wss ws wb))
-		(if (and (= (type xl) 'VLA-OBJECT) (not (vl-object-released-p xl)))
-			(msxl:CloseExcel xl)
-		)
+		(msxl:CloseExcel xl)
 		(gc)
 		(princ (strcat "\nAn error occurred: " msg))
 	)
@@ -38,7 +36,7 @@
 	
 	
 	
-	(defun ConvertNumberToString ( num )
+	(defun ConvertValueToString ( num )
 		(cond
 			((= (type num) 'REAL)
 				(rtos num 2 (- (strlen (vl-string-right-trim "0" (rtos (abs (- num (fix num))) 2 8))) 2))
@@ -58,22 +56,47 @@
 	;; [ num ]	== ANY NUMERIC VALUE, IF NUM IS NOT NUMERIC, NUM IS RETURNED UNCHANGED
 	
 	
-	(defun CreateDataMatrix ( ws / row col mxr key subk subv vals bgn end cell mtx )
-		(setq row 1 col 1 mxr (msxl-get-count (msxl-get-rows (vlax-get-property ws 'UsedRange))))
+	(defun SafeConcatenate ( stra strb )
+		(cond
+			((not strb)
+				stra
+			)
+			((and stra strb)
+				(strcat stra " " strb)
+			)
+			( t
+				""
+			)
+		)
+	)
+	;; COMBINES TWO STRINGS TOGETHER IF NEITHER ARE NIL
+	;; OTHERWISE WILL RETURN STRING "A" IF STRING "B" IS NIL OR "N/A"
+	;; [ stra ]	== STRING "A" AS THE PREFIX STRING TO STRING "B"
+	;; [ strb ]	== STRING "B" AS THE SUFFIX STRING TO STRING "A"
+	
+	 
+	(defun CreateDataMatrix ( ws row col / mxr hdr vals key val cell mtx )
+		(setq mxr (msxl-get-count (msxl-get-rows (vlax-get-property ws 'UsedRange))))
 		(while (< row mxr)
-			(if (and (setq key (msxl:GetCellVal ws row col)) (wcmatch key "*:"))
+			(if (and (msxl:IsMergedCell (setq cell (msxl:GetCell ws row col))) (setq hdr (msxl:GetCellValue cell)))
 				(progn
 					(setq vals nil) ;; INITIALIZE VALS FOR EACH NEW KEY
-					(while (and (setq subk (msxl:GetCellVal ws (setq row (1+ row)) col)) (not (wcmatch subk "*:")))
-						(setq bgn (msxl:ReturnCellAddress (setq cell (msxl:ReturnCellObject ws row (1+ col)))))
-						(setq end (msxl:ReturnCellAddress (msxl:LastNonEmptyCell cell)))
-						(if (setq subv (msxl:RangeItems->List (msxl-get-range ws (if (and bgn end) (strcat bgn ":" end) bgn))))
-							(setq vals (cons (cons subk (vl-string-right-trim " " (apply 'strcat (mapcar '(lambda ( s ) (if s (progn (setq s (ConvertNumberToString s)) (strcat s " ")) "")) subv)))) vals))
+					(while (and (< row mxr) (not (msxl:IsMergedCell (msxl:GetCell ws (setq row (1+ row)) col))))
+						(if (setq key (msxl:GetCellValue (msxl:GetCell ws row col)))
+							(progn
+								(setq val
+									(SafeConcatenate
+										(ConvertValueToString (msxl:GetCellValue (msxl:GetCell ws row (1+ col))))
+										(msxl:GetCellValue (msxl:GetCell ws row (+ col 2)))
+									) ;; SAFELY VERIFY THAT THE STRINGS CAN BE COMBINED
+								)
+								(setq vals (cons (cons key val) vals))
+							)
 						)
 					)
-					(setq mtx (cons (cons key (reverse vals)) mtx)) ;; ADD THE KEY AND ITS COLLECTED SUB-ITEMS
+					(setq mtx (cons (cons hdr (reverse vals)) mtx)) ;; ADD HEADER TO MATRIX LIST, REVERSE VALS AS TO KEEP THE CORRECT ORDER
 				)
-				(setq row (1+ row)) ;; INCREMENT ROW IF NO KEY FOUND IN THIS ROW
+				(setq row (1+ row))
 			)
 		)
 		(ObjectRelease (list ws cell))
@@ -81,6 +104,8 @@
 	)
 	;; RETURNS MATRIX OF KEY VALUE PAIRS REPRESENTING DATA FROM A PASSED EXCEL WORKSHEET
 	;; [ ws ]	== EXCEL WORKSHEET OBJECT
+	;; [ row ]	== STARTING ROW ON WORKSHEET OBJECT
+	;; [ col ]	== STARTING COLUMN ON WORKSHEET OBJECT
 	;; SEE LIBRARY FILE "LIB - MSXL Library Functions.lsp" FOR MSXL FUNCTIONS LISTED
 	
 	
@@ -124,12 +149,12 @@
 	;; [ rpl ]	== THE STRING VALUE THAT WILL REPLACE THE PATTERN VALUE IF IT IS FOUND
 	
 	
-	(defun GenerateKeyPattern ( key str )
+	(defun GenerateKeyPattern ( key val )
 		(strcat
 			"%"
-			(vl-string-trim " " key)
-			(if (and str (> (strlen str) 0))
-				(vl-string-right-trim " -?:" (vl-string-trim " " str))
+			(strcat (vl-string-trim " -?:=" key) ":")
+			(if (and val (> (strlen val) 0))
+				(vl-string-trim " -?:=" val)
 				"N/A"
 			)
 			"%"
@@ -137,13 +162,14 @@
 	)
 	;; CREATES A WILDCARD PATTERN STRING THAT CAN BE USED FOR SEARCHING AND REPLACING IN THE DOCUMENT
 	;; [ key ]	== STRING VALUE THAT REPRESENTS THE MAIN CATEGORY TO SEARCH FOR
-	;; [ str ]	== THE TAIL OF THE PATTERN
-	;; EXAMPLE: KEY = "STRUCTURAL:", STR = "PROJECT DATE -" --> "%STRUCTURAL:PROJECT DATE%"
+	;; [ val ]	== THE TAIL OF THE PATTERN
+	;; EXAMPLE: KEY = "STRUCTURAL:", VAL = "PROJECT DATE -" --> "%STRUCTURAL:PROJECT DATE%"
 	;; THIS STRING VALUE CAN NOW BE SEARCHED FOR IN THE DOCUMENT AND REPLACED WITH A NEW VALUE
 	
 	;;; MAIN ;;;
 	
 	(setq dir (vl-filename-directory (getvar "DWGPREFIX")))
+	;; C:\Users\MichaelShaffer\OneDrive - ANS Geo\File Transfer\AutoLISP\BOD Excel Data Transfer\References\Notes & Updated BOD
 	(setq fl (getfiled "Select a File" (strcat "C:\\Users\\" (getvar "LOGINNAME") "\\") "xlsx;csv" 0))	;; FOR TESTING ONLY
 	;(setq fl (getfiled "Select a File" (strcat dir "\\") "xlsx;csv" 0))								;; FOR LIVE FUNCTIONALITY USE
 	
@@ -155,20 +181,21 @@
 			(if (and wss (= (type wss) 'VLA-OBJECT))
 				(progn
 					(vlax-for ws wss
-						(if (not (= (msxl-get-name ws) "Data")) (setq nms (cons (msxl-get-name ws) nms))) ;; IGNORE "DATA" WORKSHEET
+						(if (wcmatch (strcase (msxl-get-name ws)) "* - STRUCT") (setq nms (cons (msxl-get-name ws) nms))) ;; REMOVE ALL INSTANCES OF SHEETS THAT DO NOT CONTAIN "- STRUCT"
+						;; [BESS - STRUCT, PV - STRUCT, HV - STRUCT]
 					)
 					;(setq shts (MultiSelectListBox "Select BOD Type(s)" nms t))	;; FUNCTION DEFINED IN "LIB - STD Sub Functions.lsp"
 					(setq shts (DynamicToggleBox "Select BOD Type(s)" nms))			;; FUNCTION DEFINED IN "LIB - STD Sub Functions.lsp"
 				) ;; USE DYNAMIC TOGGLE BOX OR MULTI-SELECTION BOX FOR CHOOSING "BOD" TYPE
 			)
 			(foreach sht shts
-				(setq mtx (CreateDataMatrix (msxl-get-item wss sht)))	;; TRAVERSES EXCEL SHEET AND STORES DATA AS KEY VALUE PAIRS
+				(setq mtx (CreateDataMatrix (msxl-get-item wss sht) 5 2)) ;; TRAVERSES EXCEL SHEET AND STORES DATA AS KEY VALUE PAIRS
 				(foreach itm mtx
 					(vl-remove 'nil
 						(mapcar 
 							'(lambda ( s v ) (if (setq txt (FindText s)) (vla-put-textstring txt (ReplaceTextInString (vla-get-textstring txt) s (strcase v)))))
 							(mapcar
-								'(lambda ( v ) (GenerateKeyPattern (car itm) (car v))) (cdr itm)
+								'(lambda ( v ) (GenerateKeyPattern (strcat (vl-string-subst "" " - STRUCT" (strcase sht)) ":" (car itm)) (car v))) (cdr itm) ;;; BOOKMARK ;;; ??
 							)
 							(mapcar 'cdr (cdr itm))
 						)
@@ -180,6 +207,8 @@
 	
 	;;; CREATE PATTERNS FOR DRAWING TEMPLATE BASED ON KEY VALUES FROM EXCEL FILE
 	
-	(ObjectRelease (list wss ws wb))
+	(ObjectRelease (list cell wss ws wb))
 	(msxl:CloseExcel xl)
+	(gc)
 )
+	

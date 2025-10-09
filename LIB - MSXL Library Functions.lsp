@@ -64,8 +64,12 @@
 
 
 (defun msxl:CloseExcel ( xl )
-	(vlax-invoke-method xl "Quit")
-	(vlax-release-object xl)
+	(if (and (= (type xl) 'VLA-OBJECT) (not (vlax-object-released-p xl)))
+		(progn
+			(vlax-invoke-method xl "Quit")
+			(vlax-release-object xl)
+		)
+	)
 	(gc)
 	(princ)
 )
@@ -107,7 +111,7 @@
 ;; WORKSHEET OBJECT IS RETURNED IF STRING NAME IS FOUND IN COLLECTION, ELSE NIL
 
 
-(defun msxl:ReturnCellObject ( ws row col )
+(defun msxl:GetCell ( ws row col )
 	(vlax-variant-value
 		(msxl-get-item
 			(msxl-get-cells ws)
@@ -122,22 +126,22 @@
 ;; RETURNS A CELL OBJECT BASED ON THE GIVEN ROW AND COLUMN ON THE WORKSHEET
 
 
-(defun msxl:GetCellVal ( ws row col / cell )
-	(setq cell
-		(vlax-variant-value
-			(msxl-get-item
-				(msxl-get-cells ws)
-				(vlax-make-variant row)
-				(vlax-make-variant col)
-			)
-		)
-	)
+(defun msxl:GetCellValue ( cell )
 	(vlax-variant-value (msxl-get-value cell))
 )
-;; [ ws ]	== EXCEL WORKSHEET OBJECT
-;; [ row ]	== INTEGER VALUE REPRESENTING THE ROW
-;; [ col ]	== INTEGER VALUE REPRESENTING THE COLUMN
-;; RETURNS TEXT VALUE OF WHATEVER IS FOUND IN THE CELL AT ROW, COL
+;; [ cell ]	== RANGE OBJECT REPRESENTING A SINGLE CELL
+;; RETURNS TEXT VALUE OF WHATEVER IS FOUND IN THE CELL
+
+
+(defun msxl:IsMergedCell ( cell )
+	(= :vlax-true
+		(vlax-variant-value
+			(msxl-get-mergecells cell)
+		)
+	)
+)
+;; [ cell ]	== RANGE OBJECT REPRESENTING A SINGLE CELL
+;; RETURNS T IF CELL IS MERGED WITH ADDITIONAL CELLS, ELSE NIL
 
 
 (defun msxl:LastNonEmptyCell ( cell )
