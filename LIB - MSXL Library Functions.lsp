@@ -79,6 +79,9 @@
 ;; THIS FUNCTION USES GARBAGE COLLECTION TO REMOVE REFERENCES FROM BACKGROUND PROCESSES
 
 
+
+;; WORKBOOK FUNCTIONS ;;
+
 (defun msxl:ReturnActiveWorkBook ( xl )
 	(if (and (eq (type xl) 'VLA-OBJECT) (not (vlax-object-released-p xl)))
 		(vlax-get-property xl "ActiveWorkbook")
@@ -101,8 +104,15 @@
 
 ;; WORKSHEET FUNCTIONS ;;
 
-(defun msxl:ReturnWorkSheet ( wb wsn )
-	(ReturnCollectionItem (vlax-get-property wb 'WorkSheets) wsn)
+(defun msxl:ReturnWorkSheet ( wb wsn / ws )
+	(if 
+		(not
+			(vl-catch-all-error-p 
+				(setq ws (vl-catch-all-apply 'msxl-get-item (list (vlax-get-property wb 'WorkSheets) wsn)))
+			)
+		)
+		ws
+	)
 )
 ;; RETURNS EXCEL WORKSHEET OBJECT BASED ON COLLENCTION ITEM IN WORKBOOKS
 ;; REQUIRES THE RETURNCOLLECTIONITEM FUNCTION TO OPPERATE
