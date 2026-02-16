@@ -4,6 +4,16 @@
 
 
 
+;;; MATH FUNCTIONS ;;;
+
+(defun std:DegreesToRadians ( n )
+	(* pi (/ n 180.0))
+)
+;; CONVERTS A NUMERIC VALUE REPRESENTING DEGREES TO RADIANS
+;; [ n ]	== NUMERIC VALUE REPRESENTING DEGREES
+
+
+
 ;;; DYNAMIC DCL BOXES ;;;
 
 (defun std:MultiSelectListBox ( msg lst mlt / dcl tmp des dch rtn )
