@@ -380,6 +380,14 @@
 ;; [ vrnt ]	== VARIANT TO CONVERT INTO LIST
 
 
+(defun std:FlattenList2D ( lst )
+	(mapcar '(lambda ( p ) (list (car p) (cadr p))) lst)
+)
+;; RETURNS A FLATTENED LIST OF VALUES SPECIFICALLY 2D VALUES (X, Y)
+;; [ lst ] == A LIST OF POINT VALUES -> (LIST '(10.0 10.0 0.0) '(10.0 20.0 0.0) '(20.0 30.0 0.0)) RETURN VALUE -> (10.0 10.0 10.0 20.0 20.0 30.0)
+
+
+
 
 ;;; MISC. FUNCTIONS / GLOBALS ;;;
 

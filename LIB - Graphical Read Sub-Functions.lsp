@@ -50,6 +50,36 @@
 
 
 
+(defun gr:GetFlippedPoint ( pt1 pt2 gpt / dx dy )
+	(setq
+		dx (abs (- (car pt2) (car pt1)))
+		dy (abs (- (cadr pt2) (cadr pt1)))
+	)
+	(list 
+		(if (< (car gpt) (car pt1)) (- (car pt1) dx) (+ (car pt1) dx))
+		(if (< (cadr gpt) (cadr pt1)) (- (cadr pt1) dy) (+ (cadr pt1) dy))
+		0.0
+	)
+)
+;; FLIPS X AND Y COORDINATE VALUES BASED ON MOUSE POSITION GIVING A "MIRRORING" OR FLIPPING EFFECT
+;; FUNCTION TO BE USED WITHIN A GRREAD LOOP AND GENERALLY UPDATED ITERATIVELY
+;; EX:
+;;	(while run
+;;	(setq grd (cadr (grread t 15 2)))
+;;	(if (null pta) (setq pta (getpoint)))
+;;	(if (null ptb) (setq ptb (getpoint)))
+;;	(setq lin (entmake ... (cons 10 pta) (cons 11 ptb) ... )) ;; CREATE LINE
+;;	(setq ptb (GetFlippedPoint pta ptb grd))
+;;	(setq upd (subst (cons 11 ptb) (assoc 8 (entget lin)) (entget lin)))
+;;	(entmod lin upd) ;; UPDATE LINE POINT B
+;;	)
+;; FUNCTION PERFORMS BEST USING VLA TYPE FUNCTIONS SUCH AS: (VLA-PUT LIN 'COORDINATES ... )
+;; [ pt1 ]	== STARTING OR "ANCHOR POINT TO ROTATE AROUND
+;; [ pt2 ]	== POINT THAT WILL BE ALTERED / FLIPPED
+;; [ gpt ]	== GRAPHICAL READING POINT, GENERALLY THE CADR VALUE FROM USING GRREAD FUNCTION
+
+
+
 
 ;; Object Snap for grread: Snap Function  -  Lee Mac
 ;; Returns: [fun] A function requiring two arguments:

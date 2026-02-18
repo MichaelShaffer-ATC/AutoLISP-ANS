@@ -472,12 +472,13 @@
 		*error*
 		ReturnCableLayerList CreateLineObject
 		ReturnBlockObject ReturnDynamicPropertyValue
-		CalculateAnchorPoint CalculateSecondaryPoint
+		CalculateAnchorPoint CalculateCornerPoint GetFlippedPoint CalculateJagLine
 		INVC:CreateDialogForm INVC:DialogUpdates
 		;Variables
 		run dyn sts ilp grd cod dat
-		bfr bpt dst inc lnm
-		bnm bl1 bl2 ac1 ac2 cr1 cr2 ptl gst
+		spt bpt jpt bfr dst inc lnm
+		bnm bl1 bl2 ins
+		ac1 ac2 cr1 cr2 lst ptl gst
 		ttl dcl tmp des dch
 		prs nms cbl acm ipx spl plr tag
 	)
@@ -496,6 +497,7 @@
 			(vl-bt)
 		) ;; FOR DEBUGGING
 		(if dyn (setvar 'DYNMODE dyn))
+		(if gst (vla-delete gst))
 		(redraw)
 		(strcat "\nError: " msg)
 	)
@@ -570,13 +572,69 @@
 	;; POINT PARAMETERS CONTAIN AN "X" AND "Y" VALUE WHICH IS WHY THE PRM VALUE IS USED WITH "X" AND "Y" TO CALCULATE THE POINT
 	;; "PRM" IS CASE SENSITIVE | IF "BLK" IS NOT A BLOCK, FUNCTION RETURNS NIL
 
-	(defun CalculateSecondaryPoint ( pt mpt / dst ang )
-		(setq dst 42.0) ;; 3'-6" FROM BOUNDRY LOCATION (DEFAULT)
-		(setq ang (if (< (car mpt) (car pt)) (* 1.25 pi) (* 1.75 pi)))
+	(defun CalculateCornerPoint ( pt mpt / x y dst ang )
+		(setq dst 42.0) ;; DEFAULT LENGTH FROM POINT VALUE
+		(cond
+			((and (>= (car mpt) (car pt)) (>= (cadr mpt) (cadr pt))) ; Quad 1: X+, Y+
+				(setq ang (/ pi 4.0))
+			) ; 45 degrees
+			((and (< (car mpt) (car pt)) (>= (cadr mpt) (cadr pt))) ; Quad 2: X-, Y+
+				(setq ang (* 3.0 (/ pi 4.0)))
+			) ; 135 degrees
+			((and (< (car mpt) (car pt)) (< (cadr mpt) (cadr pt))) ; Quad 3: X-, Y-
+				(setq ang (* 5.0 (/ pi 4.0)))
+			) ; 225 degrees
+			( t ; Quad 4: X+, Y-
+				(setq ang (* 7.0 (/ pi 4.0)))
+			) ; 315 degrees
+		)
 		(polar pt ang dst)
 	)
 	;; RETURN SECONDARY POINT FROM PASSED POINT LOCATION DEPENDING ON MOUSE DIRECTION
-	;; ONLY EFFECTS THE X AXIS
+	
+	(defun GetFlippedPoint ( pt1 pt2 mpt / dx dy )
+		(setq dx (abs (- (car pt2) (car pt1))))
+		(list 
+			(if (< (car mpt) (car pt1)) (- (car pt1) dx) (+ (car pt1) dx))
+			(cadr pt2)
+			0.0
+		)
+	)
+	;; FLIPS X AXIS POINT BASED ON MOUSE LOCATION
+	;;; KEPT HERE TEMPORARILY INCASE ONLY THE X AXIS NEEDS TO FLIP
+	;;; REPLACE gr:GetFlippedPoint WITH GetFlippedPoint , THIS IS A CUSTOM FUNCTION SPECIFIC TO THIS FILE
+	
+	(defun CalculateJagLine ( pt1 pt2 / dx dy )
+		(if (or
+				(equal (car pt1) (car pt2) 1e-8) 
+				(equal (cadr pt1) (cadr pt2) 1e-8)
+			)
+			nil ;; JAG LINE NOT REQUIRED
+			(progn
+				(setq
+					dx (- (car pt2) (car pt1)) ;; Horizontal delta
+					dy (- (cadr pt2) (cadr pt1)) ;; Vertical delta
+				)
+				(if (> (abs dx) (abs dy))
+					(std:FlattenList2D
+						(list
+							(polar pt1 (if (> dx 0) 0.0 pi) (/ (abs dx) 2.0))
+							(polar pt2 (if (> dx 0) pi 0.0) (/ (abs dx) 2.0))
+						)
+					) ;; CASE: Horizontal Split (X)
+					(std:FlattenList2D
+						(list
+							(polar pt1 (if (> dy 0) (* 0.5 pi) (* 1.5 pi)) (/ (abs dy) 2.0))
+							(polar pt2 (if (> dy 0) (* 1.5 pi) (* 0.5 pi)) (/ (abs dy) 2.0))
+						)
+					) ;; CASE: Vertical Split (Y)
+				)
+			)
+		)
+	)
+	; (std:FlattenList2D (list pt1 pt2)) ;; FLATTEN REFERENCE
+	;; CALCULATES INTERMEDIATE POINTS EITHER IN THE X AXIS OR Y AXIS IF THE PASSED POINTS X & Y VALUES VARY
+	;; RETURNS A FLATTENED LIST OF POINT VALUES BETWEEN PASSED POINTS PT1 AND PT2
 	
 	(defun PointTest ( pt )
 		(entmake (list (cons 0 "POINT") (cons 10 pt)))
@@ -670,7 +728,7 @@
 			"					: edit_box {"
 			"						label = \"Polar Tracking Angle (Degrees):\";"
 			"						key = \"inc\";"
-	(strcat "						value = \"" (if (or (null inc) (not (<= 0.0 (atof inc) 90.0))) "0.0" inc) "\";")
+	(strcat "						value = \"" (if (or (null inc) (not (<= 0.0 (atof inc) 90.0))) "60.0" inc) "\";")
 	(strcat "						is_enabled = " (if (or (null plr) (= plr "0")) "false" "true") ";")
 			"					}"
 			"				}"
@@ -721,45 +779,32 @@
 							(cond
 								((= cod 5) ;; MOUSE MOVEMENT | TRACKING LOGIC ONLY
 									(redraw) ;; CLEAR PREVIOUS FRAMES
-									; (if (and bpt (= plr "1")) (setq dat (gr:PolarMode bpt dat (atof inc))))
-									; (if (and bl1 (null gst)) (setq gst (CreateLineObject (list (setq bgn (std:Variant->List (vla-get-insertionpoint bl1))) (setq end (CalculateSecondaryPoint bpt))) lnm 10)))
-									; (if gst (vlax-put gst 'Coordinates (list (car bgn) (cadr bgn) (car end) (cadr end))))
-									
-									(if (and bpt (= plr "1")) (setq dat (gr:PolarMode bpt dat (atof inc))))
-									
-									; (if (and bl1 gst ac1 (or (null ptl) (null bl2))) (setq cr1 (+ (cadr ac1) (* 42.0 (sin (/ pi 4.0)) (if (>= (cadr bpt) (cadr ins)) 1.0 -1.0)))))
-									;; TRACK MOVEMENT OF MOUSE FOR "FLIP" AFTER ANCHOR POINT "AC1" IS SPEFIFIED | "AC2" WILL BE CALCULATED AUTOMATICALLY
-									; (if (and gst (or (null ptl) (null bl2))) (vlax-put gst 'Coordinates (list (car ac1) (cadr ac1) (car end) (cadr end))))
-									
-									;; CALCULATE X VALUE OF SECONDARY POINT AND Y VALUE OF SECONDARY POINT
-									;;	- X VALUE DETERMINED BY MOUSE LOCATION IN COORESPONDENCE TO INSERTION POINT
-									;;	- Y VALUE DETERMINED BY BASEPOINT ABOVE OR BELOW BLOCK OBJECT (SHOULD NOT CHANGE ONCE SELECTION IS MADE)
-									
-									
-									
-									;; FIX LOGIC IN CALCULATING POINT VALUES
-									;;	- LINE SHOWS UP AS 45 DEGREE UNTIL FLIPPED TO LEFT SIDE
-									;;	- LINE LENGTH IS NOT EVEN FOR BOTH OPTIONS
-									;;	- FIX MULTIPLE SELECTION POINT LOGIC
-									;; FIX LINE GHOSTING TO NOT CONTINUE AFTER SELECTING MULTIPLE POINTS, INITIAL LINE SHOULD BE TREATED AS SEPARATE ENTITY
-									;;	- CREATE NEW LINE OBJECTS ONCE INITIAL LINE IS CREATED FROM FIRST SELECTED BLOCK OBJECT
-									;;	- AUTOLINE SETTING SHOULD DRAW A LINE FROM FIRST SELECTED BLOCK TO THE SECOND SELECTED BLOCK
-									
-									;; CALCULATE LENGTH OUTSIDE OF BOUNDING BOX OF BLOCK AT SOME POINT ... FUTURE PATCH ???
+									(if bpt (setq dat (gr:PolarMode bpt dat (if (= plr "1") (atof inc) 90.0))))
+									(if (and cr1 gst (listp dat) (null ptl) (null bl2))
+										(progn
+											(setq cr1 (gr:GetFlippedPoint ac1 cr1 dat))
+											(setq lst
+												(list
+													(car ac1) (cadr ac1) ;; Point 1: Anchor
+													(car cr1) (cadr cr1) ;; Point 2: 45° Corner
+													;(car dat) (cadr dat) ;; Point 3: Snapped Cursor (Ortho/Polar)
+												)
+											)
+											(vlax-put gst 'Coordinates lst)
+											(setq bpt cr1)
+										)
+									)
 								)
 								((= cod 3) ;; LEFT CLICK
-									(setq bpt dat)
-									; (princ "\nClick!") (princ " | Value: ") (princ bpt)
+									(setq spt dat)
 									
-									;; CHECK THAT INVERTER BLOCK WAS SELECTED FIRST
-									;; IF NOT - SEND MESSAGE TO USER TO SELECT AN INVERTER BLOCK
-									;; AFTER INVERTER BLOCK IS SELECTED CHECK THAT ACM IS "ON"
-									;; IF IT IS PROMPT USER TO SELECT NEXT INVERTER BLOCK TO CONNECT TO
-									;; IF ACM IS "OFF" CURSOR TO CHANGE FROM PICKBOX TO CROSSHAIRS AND ALLOW USER TO SELECT VERTICIES UNTIL ANOTHER INVERTER BLOCK IS SELECTED
-									;; FUNCTION CONTINUES UNTIL EXITED
-									
-									;; WILL NEED TO SAVE THE LAST BLOCK THAT WAS SELECTED AND STORE IT'S POINTS AS A VARIABLE (MV COMPARTMENT)
-									;; THIS WILL BE THE END POINTS (START OR END) OF THE LINE CABLE SEGMENT
+									(if bpt
+										(setq bpt (gr:PolarMode bpt dat (if (= plr "1") (atof inc) 90.0)))
+										(if cr1
+											(setq bpt (gr:PolarMode spt cr1 (if (= plr "1") (atof inc) 90.0)))
+											(setq bpt dat)
+										)
+									) ;; CONSTRAINS TO 90 DEGREES OR POLAR SET DEGREES
 									
 									(cond
 										;; CASE A: NO START BLOCK YET - Try to set bl1
@@ -767,28 +812,10 @@
 											(if (null (setq bl1 (ReturnBlockObject bpt)))
 												(princ "\nPlease select a starting block for cable logic (Inverter).")
 												(progn
-												
-													;; DETERMINE TOP OR BOTTOM CONNECTION BASED ON USER SELECTION WITHIN BLOCK
-													;; 	- USED TO DETERMINE Y VALUE OF NEXT POINT FROM ANCHOR LOCATION
-													
 													(if (setq ac1 (CalculateAnchorPoint bl1 "MV Compartment"))
-														(setq gst (CreateLineObject (list ac1 (CalculateSecondaryPoint bpt dat)) lnm 10))
+														(setq gst (CreateLineObject (list ac1 (setq cr1 (CalculateCornerPoint ac1 dat))) lnm 10))
 													)
-													
-													; (if (null gst)
-														; (setq gst (CreateLineObject (list (std:Variant->List (vla-get-insertionpoint bl1)) (CalculateSecondaryPoint bpt)) lnm 10))
-														; UPDATE GST END POINT
-													; )
-													
 													(princ "\nGhost Line Value: ") (princ gst)
-													;; 	- THIS WILL BE REQUIRED FOR BOTH FIRST BLOCK AND SECOND BLOCK SELECTION LOGIC
-													;; UPDATE ANCHOR POINT FOR BEGINNING OF CABLE
-													;;	- CONNECT TO MV COMPARTMENT LOCATED IN BLOCK OBJECT
-													;;	- SET GHOSTING LOGIC FOR START OF LINE
-													;; 	- (setq mpt (cadr (grread t)))
-													;; CALCULATED ANCHOR POINT FOR "V" IN CABLE FROM BLOCK MUST BE 3'-6" FROM BLOCK BOUNDING BOX
-													;; THIS CAN BE A FUTURE PATCH FOR NOW
-													
 												)
 											)
 											;; ADD LOGIC TO DETERMINE WHICH BLOCKS COUNT (INVERTER FOR FIRST BLOCK SELECTION, INVERTER OR SUBSTATION FOR SECOND BLOCK SELECTION
@@ -798,35 +825,100 @@
 										( bl1
 											(if (= acm "1")
 												;;--- ACM MODE: Only allow block-to-block ---
-												(if (setq bl2 (ReturnBlockObject bpt))
+												(if (setq bl2 (ReturnBlockObject spt))
 													(progn
 														(princ "\nEnd block targeted! Drawing direct connection...")
 														;; DETERMINE TOP OR BOTTOM CONNECTION TO BLOCK BASED ON USER CONNECTION
 														
 														;; [Insert Logic: Draw line from bl1 to bl2]
-														
-														(setq bl1 nil bl2 nil) ;; Reset for next run
+														(if (setq ac2 (CalculateAnchorPoint bl2 "MV Compartment"))
+															(progn
+																;; 1. Calculate the final corner leading into the second block
+																(setq cr2 (CalculateCornerPoint ac2 dat))
+																
+																(if (setq jpt (CalculateJagLine cr1 cr2))
+																	(setq ptl (append ptl jpt))
+																)
+																
+																;; 2. Update the existing 'gst' with BOTH the corner and the final anchor
+																(vlax-put gst 'Coordinates 
+																	(append 
+																		(apply 'append (std:FlattenList2D (list ac1 cr1)))
+																		(apply 'append ptl)
+																		(apply 'append (std:FlattenList2D (list cr2 ac2)))
+																	)
+																)
+																
+																;; 3. Finalize visual and clear pointer
+																(vla-update gst)
+																(setq gst nil)
+																
+																(setq bpt ac2)
+																(setq ac1 ac2)
+																(setq gst (CreateLineObject (list ac1 (setq cr1 (CalculateCornerPoint ac1 dat))) lnm 10))
+																
+																(setq bl1 bl2 bl2 nil jpt nil ptl nil) ;; RESET FOR NEXT RUN
+
+																(princ "\nConnection to MV Compartment complete.")
+															)
+														)
 													)
 													(princ "\nACM Mode: Please select a valid end block for cable logic (Inverter / Substation).")
 												)
 
 												;;--- MANUAL MODE: Collect points UNTIL a block is hit ---
-												(if (setq bl2 (ReturnBlockObject bpt))
+												(if (setq bl2 (ReturnBlockObject spt))
 													(progn
 														(princ "\nEnd block hit! Finalizing path...")
 														;; DETERMINE TOP OR BOTTOM CONNECTION TO BLOCK BASED ON USER CONNECTION
 														
-														(setq ptl (cons bpt ptl)) ;; MIGHT NEED TO CHANGE THIS TO CALC BLOCK ENTRY POINT ;;; BOOKMARK ;;;
-														;; UPDATE ANCHOR POINT FOR END OF CABLE
-														;;	- CONNECT TO MV COMPARTMENT LOCATED IN BLOCK OBJECT
-														
-														;; [Insert Logic: Draw polyline/cable using (reverse ptl)]
+														;(setq ptl (append ptl (std:FlattenList2D (list bpt)))) ;; MIGHT NEED TO CHANGE THIS TO CALC BLOCK ENTRY POINT ;;; BOOKMARK ;;;
 														
 														(princ (strcat "\nTotal vertices: " (itoa (length ptl))))
-														(setq bl1 nil bl2 nil ptl nil) ;; Reset everything
+														;(setq bl1 nil bl2 nil ptl nil) ;; Reset everything
+														
+														(if (setq ac2 (CalculateAnchorPoint bl2 "MV Compartment"))
+															(progn
+																;; 1. Calculate the final corner leading into the second block
+																(setq cr2 (CalculateCornerPoint ac2 dat))
+																
+																(if (setq jpt (CalculateJagLine (if ptl (last ptl) cr1) cr2))
+																	(setq ptl (append ptl jpt))
+																)
+																
+																;; 2. Update the existing 'gst' with BOTH the corner and the final anchor
+																(vlax-put gst 'Coordinates 
+																	(append
+																		(apply 'append (std:FlattenList2D (list ac1 cr1)))
+																		(apply 'append ptl)
+																		(apply 'append (std:FlattenList2D (list cr2 ac2)))
+																	)
+																)
+																
+																;; 3. Finalize visual and clear pointer
+																(vla-update gst)
+																(setq gst nil)
+																
+																(setq bpt ac2)
+																(setq ac1 ac2)
+																(setq gst (CreateLineObject (list ac1 (setq cr1 (CalculateCornerPoint ac1 dat))) lnm 10))
+																
+																(setq bl1 bl2 bl2 nil jpt nil ptl nil) ;; RESET FOR NEXT RUN
+
+																(princ "\nConnection to MV Compartment complete.")
+															)
+														)
 													)
 													(progn
-														(setq ptl (cons bpt ptl))
+														(if gst
+															(vlax-put gst 'Coordinates 
+																(append
+																	(std:Variant->List (vla-get-coordinates gst))
+																	(apply 'append (std:FlattenList2D (list bpt)))
+																)
+															)
+														)
+														(setq ptl (append ptl (std:FlattenList2D (list bpt))))
 														(princ "\nPoint added to path. Pick next point or select end block (Inverter / Substation).")
 													)
 												)
@@ -840,30 +932,49 @@
 									
 								)
 								((= cod 2) ;; KEYBOARD INPUT
-									(cond
-										((member dat (mapcar 'ascii (list "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))) ;; DISTANCE TYPED IN KEYBOARD LOGIC
-											(setq bfr (strcat bfr (chr dat)))
-											(princ (strcat "\rCable Length: " bfr " | Press [ENTER] to accept."))
-										) ;; LOGIC FOR ALLOWING USER TO TYPE DISTANCE STRING FROM KEYBOARD SAVING VALUE TO A BUFFER
-										((= dat 8) ;; BACKSPACE LOGIC
-											(if (> (strlen bfr) 0)
-												(progn
-													(setq bfr (substr bfr 1 (1- (strlen bfr))))
-													(princ (strcat "\rCable Length: " bfr " | Press [ENTER] to accept."))
-												) ;; CLEAR THE LAST CHARACTER THEN RE-PRINT BUFFER
-												(princ "\rEnter a value for distance.")
+									(if (not (= acm "1"))
+										(cond
+											((member dat (mapcar 'ascii (list "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))) ;; DISTANCE TYPED IN KEYBOARD LOGIC
+												(setq bfr (strcat bfr (chr dat)))
+												(princ (strcat "\rCable Length: " bfr " | Press [ENTER] to accept."))
+											) ;; LOGIC FOR ALLOWING USER TO TYPE DISTANCE STRING FROM KEYBOARD SAVING VALUE TO A BUFFER
+											((= dat 8) ;; BACKSPACE LOGIC
+												(if (> (strlen bfr) 0)
+													(progn
+														(setq bfr (substr bfr 1 (1- (strlen bfr))))
+														(princ (strcat "\rCable Length: " bfr " | Press [ENTER] to accept."))
+													) ;; CLEAR THE LAST CHARACTER THEN RE-PRINT BUFFER
+													(princ "\rEnter a value for distance.")
+												)
 											)
 										)
+									)
+									(cond
 										((= dat 13) ;; ENTER PRESS
 											(if (and (not (null bpt)) (/= bfr ""))
 												(progn
 													(setq mpt (cadr (grread t)))
 													(setq dst (distof bfr))
-													(setq bpt (polar bpt (angle bpt (if (= plr "1") (gr:PolarMode bpt mpt (atof inc)) mpt)) dst))
+													(setq bpt (polar bpt (angle bpt (gr:PolarMode bpt mpt (if (= plr "1") (atof inc) 90.0))) dst))
 													(princ (strcat "\rCable Length: " bfr))
+													
+													;; UPDATE LINE "GST"
+													(if gst
+														(progn
+															;(if (null ptl) (vlax-put gst 'Coordinates (list (car ac1) (cadr ac1) (car cr1) (cadr cr1))))
+															(setq ptl (append ptl (std:FlattenList2D (list bpt))))
+															(vlax-put gst 'Coordinates
+																(append
+																	(std:Variant->List (vla-get-coordinates gst))
+																	(apply 'append (std:FlattenList2D (list bpt)))
+																)
+															)
+														) ;; FLATTEN LIST TO X AND Y VALUES ONLY
+													)
 													(PointTest bpt)
 												) ;; BUFFER CHECK - CALCULATE DISTANCE FROM LAST POINT TO TYPED POINT AND DRAW CABLE LINE FOR TOTAL DISTANCE
 												(progn
+													(if gst (vla-delete gst))
 													(setq ilp nil run nil)
 												) ;; IF BUFFER IS EMPTY - [ENTER] KEY (CANCEL FUNCTION)
 											)
