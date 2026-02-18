@@ -349,7 +349,12 @@
 											;; ORTHO MODE CHECK / LOGIC
 											(if (and bpt (= ort "1")) (setq dat (gr:OrthoMode bpt dat)))
 											;; OSNAP MODE CHECK / LOGIC
-											(if (= osm "1") (setq dat (osf dat 3))) ;; (setq dat (osf dat (getvar 'osmode)))
+											(redraw (vlax-vla-object->ename gst) 2) ;; HIDE BLOCK
+											(if (= osm "1") (setq dat (osf dat (getvar 'osmode)))) ;; CALCULATE SNAP ;; (setq dat (osf dat BIT_CODE))
+											(redraw (vlax-vla-object->ename gst) 1) ;; SHOW BLOCK
+											;; CHECK GRAPHICAL READ SUBFUNCTION LISP FILE FOR ADDITIONAL BIT CODES WITH LM:grsnap:snapfunction
+											;; HIDE / SHOW LOGIC ALLOWS FOR SMOOTH SNAPPING LOGIC WITHOUT SACRIFICING PERFORMANCE
+
 											(vla-put-insertionpoint gst (vlax-3d-point dat))
 										)
 										((= cod 3) ;; LEFT CLICK
