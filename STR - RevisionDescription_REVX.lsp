@@ -10,11 +10,11 @@
 		*error*
 		ReturnLastAttributeValue ReturnNextAttribute ClearAttributeValues ReplaceAttributeValue
 		FilterAttributesByTagString GetRevisionType
-		UpdateTitleBlockAttributes
+		UpdateTitleBlockAttributes GetCurrentDate
 		;DCL Functions
 		DCL:RunDialogChecks DCL:LayoutList DCL:Cancel DCL:SelectAll
 		;DCL (Global Variables)
-		ttl dcl tmp des dch lyts res rev date desc apr clr
+		ttl dcl tmp des dch lyts res rev date desc cur clr
 		;Variables
 		tblks
 	)
@@ -138,6 +138,18 @@
 	)
 	;; RECURSIVE FUNCTION TO UPDATE TITLEBLOCK INFORMATION, MAKES CALLS TO SEVERAL FUNCTIONS, USED AS A HELPER TO UPDATE DATA
 	
+	(defun GetCurrentDate ( / date )
+		(setq date (rtos (getvar "CDATE") 2 0))
+		(strcat
+			(substr date 5 2)
+			"/"
+			(substr date 7 8)
+			"/"
+			(substr date 1 4)
+		)
+	)
+	;; RETURNS THE CURRENT DATE IN A STANDARD DEFINED FORMAT
+	
 	
 	(vl-load-com)
 	
@@ -235,18 +247,18 @@
 			"				: edit_box {"
 			"					key = \"desc\";"
 			"					label = \"Description:\";"
-			"					edit_limit = 20;"
-			"					value = \"20 CHARACTERS MAX.\";"
+			"					edit_limit = 32;"
+			"					value = \"32 CHARACTERS MAX.\";"
 			"				}"
 			"				: edit_box {"
 			"					key = \"date\";"
 			"					label = \"Revision Date:\";"
-			"					value = \"mm/dd/yy\";"
+			"					value = \"MM/DD/YYYY\";"
 			"				}"
-			"				: edit_box {"
-			"					key = \"apr\";"
-			"					label = \"Approved By:\";"
-			"					value = \"XXX\";"
+			"				: toggle {"
+			"					label = \"Use current date\";"
+			"					value = \"0\";"
+			"					key = \"cur\";"
 			"				}"
 			"			}"
 			"		}"
@@ -278,11 +290,13 @@
 					((or (= (get_tile "desc") "") (= (get_tile "date") "") (= (get_tile "apr") ""))
 						(set_tile "error" "Error: Description, date, or approved by values cannot be blank.")
 					)
+					((not (wcmatch (get_tile "date") "##/##/####"))
+						(set_tile "error" "Error: Formatting for date is incorrect (MM/DD/YYYY).")
+					)
 					( t
 						(setq 
 							date (get_tile "date")
 							desc (strcase (get_tile "desc"))
-							apr (strcase (get_tile "apr"))
 							rev (substr rev (strlen rev) 1) ;; RETURNS THE LAST CHARACTER VALUE OF KEY ("revA" -> "A") ;; BASED ON HARDCODED VALUE IN DCL CODE
 							clr (if (= (get_tile "clr") "1") t nil)
 						)
@@ -310,7 +324,9 @@
 												(cons "DATE_" date)
 											)
 										) ;; CONSOLIDATES FREQUENT CALLS TO OTHER FUNCTIONS
-										(if (boundp 'c:UPDATESHEETINDEX) (c:UPDATESHEETINDEX)) ;; FUNCTION DEFINED ELSWHERE, NEED TO VERIFY IT EXISTS FIRST THEN RUN
+										;(if (boundp 'c:UPDATESHEETINDEX) (c:UPDATESHEETINDEX))
+										;; FUNCTION DEFINED ELSWHERE, NEED TO VERIFY IT EXISTS FIRST THEN RUN
+										;; REMOVED DUE TO SOME PROJECTS REFERENCING OUTSIDE DRAWINGS WITHIN INDEX TABLE
 									)
 									(princ "\nNo attribute data was found within title blocks.")
 								)
@@ -384,6 +400,7 @@
 			(action_tile "cancel" "(DCL:Cancel)")
 			
 			(action_tile "lyts" "(progn (setq res $value) (set_tile \"all\" \"0\"))")
+			(action_tile "cur" "(set_tile \"date\" (if (= $value \"1\") (GetCurrentDate) \"MM/DD/YYYY\"))")
 			(action_tile "all" "(DCL:SelectAll)")
 			
 			(action_tile "prlm" "(DCL:ClearRadioColumn (setq rev $value))")
