@@ -9,7 +9,7 @@
 		;Functions
 		*error*
 		ReturnLastAttributeValue ReturnNextAttribute ClearAttributeValues ReplaceAttributeValue
-		FilterAttributesByTagString GetRevisionType
+		FilterAttributesByTagString GetRevisionType CycleAttributeValuesUp
 		UpdateTitleBlockAttributes GetCurrentDate
 		;DCL Functions
 		DCL:RunDialogChecks DCL:LayoutList DCL:Cancel DCL:SelectAll
@@ -115,15 +115,27 @@
 	)
 	;; COMPARES REVISION TYPES (SYM VS INT) OF PREVIOUS REVISIONS (IF ANY) AND NEW REVISION SELECTED FROM DCL
 	
+	(defun CycleAttributeValuesUp ( tag val ttb / i atts prv )
+		(repeat (setq i (length (setq atts (FilterAttributesByTagString tag ttb))))
+			;; REPLACE EXISTING VALUE, SAVE CURRENT AS PREVIOUS
+			(setq prv (vla-get-textstring (nth (1- i) atts)))
+			(vla-put-textstring (nth (1- i) atts) val)
+			(setq val prv)
+			(setq i (1- i))
+		)
+	)
+	;; CYCLES ATTRIBUTE VALUES FROM BOTTOM TO TOP, REPLACING THE OLDEST VALUE WITH THE PREVIOUS ATTRIBUTES VALUE
+	
 	(defun UpdateTitleBlockAttributes ( blks map )
 		(mapcar
 			'(lambda ( blk )
 				(mapcar
 					'(lambda ( pair )
 						(	(lambda ( tag val nxt )
-								(if nxt
-									(vla-put-textstring nxt val)
-								) ;; REPLACE EXISTING ATTRIBUTE VALUE
+								(if (null nxt)
+									(CycleAttributeValuesUp tag val blk) ;; CYCLE REVISIONS UP
+									(vla-put-textstring nxt val) ;; REPLACE EXISTING ATTRIBUTE VALUE
+								)
 							)
 							(car pair)
 							(cdr pair)
@@ -211,6 +223,10 @@
 			"						label = \"Revision F\";"
 			"						key = \"revF\";"
 			"					}"
+			"					: radio_button {"
+			"						label = \"Revision G\";"
+			"						key = \"revG\";"
+			"					}"
 			"				}"
 			"				: radio_column {"
 			"					key = \"finl\";"
@@ -238,6 +254,10 @@
 			"					: radio_button {"
 			"						label = \"Revision 5\";"
 			"						key = \"rev5\";"
+			"					}"
+			"					: radio_button {"
+			"						label = \"Revision 6\";"
+			"						key = \"rev6\";"
 			"					}"
 			"				}"
 			"			}"
@@ -376,9 +396,9 @@
 							(set_tile b "0")
 						)
 					)
-					(if (member rev (list "revA" "revB" "revC" "revD" "revE" "revF"))
-						(list "rev0" "rev1" "rev2" "rev3" "rev4" "rev5")
-						(list "revA" "revB" "revC" "revD" "revE" "revF")
+					(if (member rev (list "revA" "revB" "revC" "revD" "revE" "revF" "revG"))
+						(list "rev0" "rev1" "rev2" "rev3" "rev4" "rev5" "rev6")
+						(list "revA" "revB" "revC" "revD" "revE" "revF" "revG")
 					)
 				)
 			)
