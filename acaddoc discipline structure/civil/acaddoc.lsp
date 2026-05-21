@@ -2,7 +2,7 @@
 ;; PLACE ACADDOC FILE IN SUPPORT LOCATION FOR AUTO LOADING
 ;; ALL .LSP / .FAS FILES MUST BE LOCATED IN 'DIR' LOCATION NOTED IN CODE
 
-(defun c:lisp_load ( / dsp dir Lisp_Load:AddTrustedPath )
+(defun c:lisp_load ( / dsp dir )
 	(setq dsp "CIVIL")
 	(setq dir (strcat "C:\\_ACC\\ACCDocs\\ANS Team\\ANS_STD\\Project Files\\05_SOFTWARE_SUPPORT\\AutoLISP\\" dsp "\\Load"))
 	; C:\_ACC\ACCDocs\ANS Team\ANS_STD\Project Files\05_SOFTWARE_SUPPORT\AutoLISP\[ DISCIPLINE ]\Load\Support
