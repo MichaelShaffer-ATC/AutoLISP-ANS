@@ -15,24 +15,25 @@
 	;; 1 = (DEFAULT) LOADS EXECUTABLES FROM TRUSTED LOCATIONS ONLY. SHOWS WARNING PROMPT TO USER IF FILE IS IN AN UNTRUSTED LOCATION. USER AUTHORIZATION REQUIRED
 	;; 2 = LOADS EXECUTABLES ONLY IF THEY ARE IN A TRUSTED LOCATION SPECIFIED IN THE TRUSTEDPATHS SYSTEM VARIABLE. IGNORES ALL ATTEMPTS TO LOAD IF NOT SPECIFIED IN TRUSTEDPATHS
 	
-	
-	(if (null (vl-file-directory-p dir))
-		(princ (strcat "\nCompiled \"" dsp "\" AutoLISP functions failed to load. Directory not found.\nDirectory: \"" dir "\""))
-		(progn
-			(princ (strcat "\nLoading compiled \"" dsp "\" AutoLISP files...\n\n"))
-			(mapcar '(lambda ( x ) (load (strcat dir "\\" x))) (vl-directory-files dir "*.fas"))
+	(defun Load:Functions ( dsp dir )
+		(if (null (vl-file-directory-p dir))
+			(princ (strcat "\nCompiled \"" dsp "\" AutoLISP functions failed to load. Directory not found.\nDirectory: \"" dir "\""))
+			(progn
+				(princ (strcat "\nLoading compiled \"" dsp "\" AutoLISP files...\n\n"))
+				(mapcar '(lambda ( x ) (setq Load:FileName x) (load (strcat dir "\\" x))) (vl-directory-files dir "*.fas"))
+			)
 		)
+		(princ)
 	)
 	
-	(setq dir (strcat (vl-string-right-trim (strcat "\\" dsp "\\Load") dir) "\\ANS\\Global"))
-	
-	(if (null (vl-file-directory-p dir))
-		(princ (strcat "\nCompiled \"General ANS\" AutoLISP functions failed to load. Directory not found.\nDirectory: \"" dir "\""))
-		(progn
-			(princ (strcat "\nLoading compiled \"General ANS\" AutoLISP files...\n\n"))
-			(mapcar '(lambda ( x ) (load (strcat dir "\\" x))) (vl-directory-files dir "*.fas"))
+	(Load:Functions dsp dir)
+	(setq dir
+		(strcat
+			(substr dir 1 (- (strlen dir) (strlen (strcat "\\" dsp "\\Load"))))
+			"\\ANS\\Global"
 		)
 	)
+	(Load:Functions "General ANS" dir)
 	;; ONLY LOADING COMPILED .LSP (.FAS) CODES FOR SECURITY
 	;; PREVENTS USERS FROM RUNNING MALICIOUS CODE SINCE IT WILL NEED TO BE CHECKED AND THEN COMPILED
 	;; THIS ALSO PREVENTS RUNNING THE ACADDOC.LSP FILE IN AN ENDLESS LOOP IF LOADED FROM ROOT LOCATION "Support"
@@ -40,6 +41,21 @@
 	;(mapcar '(lambda ( x ) (vl-cmdf "_NETLOAD" (strcat dir "DLL\\" x))) (vl-directory-files (strcat dir "DLL Loadout\\") "*.dll"))
 	;; FOR FUTURE REFERENCE TO LOAD .DLL FILES WHEN APPLICABLE
 	
+	(if Load:FileName (setq Load:FileName nil)) ;; GLOBAL VARIABLE FOR DESCRIPTION LOGGER
+	
+	(princ)
+)
+
+
+(defun Load:DescriptionLog ( cmd desc )
+	(princ
+	  	(strcat
+		  	"\n>> LOADED: " (strcase Load:FileName)
+			"\n   - Callback:    " (strcase cmd)
+			"\n   - Description: " desc
+			"\n------------------------------------------------"
+		)
+	)
 	(princ)
 )
 
