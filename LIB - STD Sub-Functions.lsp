@@ -182,21 +182,27 @@
 ;; [ bnm ]	== BLOCK NAME STRING OF NESTED BLOCK TO SEARCH FOR
 
 
-(defun std:GetBlockVisibilityList ( blkDef / dct vis )
-  ;; blkDef is the vla-object from the DBX 'Blocks' collection
-  (if (and (= (vla-get-hasextensiondictionary blkDef) :vlax-true)
-           (setq dct (vla-getextensiondictionary blkDef))
-           ;; Search for the enhanced block data in the dictionary
-           (setq vis (vl-some 
-                       '(lambda (pair) 
-                          (if (and (= (car pair) 360)
-                                   (= (cdr (assoc 0 (entget (cdr pair)))) "BLOCKVISIBILITYPARAMETER"))
-                              (cdr pair)))
-                       (dictsearch (vlax-vla-object->ename dct) "ACAD_ENHANCEDBLOCK")))
-      )
-      ;; DXF 303 stores the visibility state names
-      (mapcar 'cdr (vl-remove-if-not '(lambda (x) (= (car x) 303)) (entget vis)))
-  )
+(defun std:GetBlockVisibilityList ( def / dct vis )
+	;; def IS THE VLA-OBJECT FROM THE DBX 'BLOCKS' COLLECTION
+	(if (and
+			(= (vla-get-hasextensiondictionary def) :vlax-true)
+			(setq dct (vla-getextensiondictionary def)) ;; SEARCH FOR THE ENHANCED BLOCK DATA IN THE DICTIONARY
+			(setq vis
+				(vl-some 
+					'(lambda ( pr ) 
+						(if (and
+								(= (car pr) 360)
+								(= (cdr (assoc 0 (entget (cdr pr)))) "BLOCKVISIBILITYPARAMETER")
+							)
+							(cdr pr)
+						)
+					)
+					(dictsearch (vlax-vla-object->ename dct) "ACAD_ENHANCEDBLOCK")
+				)
+			)
+		)
+		(mapcar 'cdr (vl-remove-if-not '(lambda (x) (= (car x) 303)) (entget vis))) ;; DXF 303 STORES THE VISIBILITY STATE NAMES
+	)
 )
 ;; RETURNS A LIST OF BLOCK VISIBILITIES NAMES WITHIN A PASSED BLOCK OBJECT
 ;; [ blk ]	== BLOCK OBJECT
@@ -290,6 +296,35 @@
 ;; [ objs ]	== LIST OF COM OBJECTS TO RELEASE FROM MEMORY
 
 
+(defun std:GetCustomPropertyValue ( key / dwp val )
+	(setq dwp (vla-get-summaryinfo (vla-get-activedocument (vlax-get-acad-object))))
+	(if (vl-catch-all-error-p (vl-catch-all-apply 'vla-getcustombykey (list dwp key 'val)))
+		nil
+		val
+	)
+)
+;; RETURNS CUSTOM DRAWING PROPERTY VALUE OF 'key' IF KEY EXISTS, ELSE RETURNS NIL IF KEY IS NOT FOUND
+;; [ key ] == STRING VALUE FOR KEY TO SEARCH CUSTOM PROPERTIES FOR
+
+
+(defun std:SetCustomPropertyValue ( key val / dwp )
+	(setq dwp (vla-get-summaryinfo (vla-get-activedocument (vlax-get-acad-object))))
+	(not (vl-catch-all-error-p (vl-catch-all-apply 'vla-setcustombykey (list dwp key val))))
+)
+;; RETURNS CUSTOM DRAWING PROPERTY VALUE OF 'key' IF KEY EXISTS, ELSE RETURNS NIL IF KEY IS NOT FOUND
+;; [ key ] == STRING VALUE FOR KEY TO SEARCH CUSTOM PROPERTIES FOR
+;; [ val ] == STRING VALUE TO UPDATE KEY
+
+
+(defun std:AddCustomProperty ( key val / dwp )
+	(setq dwp (vla-get-summaryinfo (vla-get-activedocument (vlax-get-acad-object))))
+	(not (vl-catch-all-error-p (vl-catch-all-apply 'vla-addcustominfo (list dwp key (if (null val) "" val)))))
+)
+;; CREATES NEW CUSTOM DRAWING PROPERTY
+;; [ key ] == STRING VALUE FOR NEW KEY
+;; [ val ] == STRING VALUE FOR NEW KEYS VALUE, DEFAULTS TO EMPTY STRING IF NIL IS PASSED AS VALUE
+
+
 
 ;;; STRING MANUPULATION ;;;
 
@@ -351,10 +386,95 @@
 		((= typ 'INT)
 			(itoa val)
 		)
+		( t
+			""
+		)
 	)
 )
 ;; USED TO CHECK IF A VALUE IS A STRING OR NUMERIC; RETURNS THE PASSED VALUE AS A STRING IF IT IS NUMERIC
 ;; [ val ]	== NUMERIC OR STRING VALUE TO CONVERT / CHECK 
+
+
+(defun std:CurrentDateTime ( fmt / dt mo dy yr hr mn tim ap bas mos )
+	(setq dt (rtos (getvar "CDATE") 2 4)) ;; INCLUDE TIME UP TO MINUTES
+	(setq
+		mo (substr dt 5 2)
+		dy (substr dt 7 2)
+		yr (substr dt 1 4)
+		hr (substr dt 10 2)
+		mn (substr dt 12 2)
+	)
+	;; TIME PADDING IF REQUIRED; 12:00 AM
+	(if (= (strlen hr) 0) (setq hr "00"))
+	(if (= (strlen hr) 1) (setq hr (strcat "0" hr)))
+	(if (= (strlen mn) 0) (setq mn "00"))
+	(if (= (strlen mn) 1) (setq mn (strcat "0" mn)))
+	(setq tim
+		(cond
+			((vl-string-search "HH:MM" fmt) ;; 24 HOUR CYCLE
+				(setq fmt (vl-string-subst "" "HH:MM" fmt))
+				(strcat hr ":" mn)
+			)
+			((vl-string-search "hh:mm" fmt) ;; 12 HOUR CYCLE
+				(setq fmt (vl-string-subst "" "hh:mm" fmt))
+				(setq ap (if (< (atoi hr) 12) "AM" "PM"))
+				(cond
+					((= (atoi hr) 0) (setq hr "12"))
+					((> (atoi hr) 12) (setq hr (itoa (- (atoi hr) 12))))
+				)
+				(if (= (strlen hr) 1) (setq hr (strcat "0" hr)))
+				(strcat hr ":" mn " " ap)
+			)
+			( t
+				"" ;; NO TIME STAMP INCLUDED
+			)
+		)
+	)
+	(setq fmt (strcase (vl-string-right-trim " " fmt)))
+	(setq bas
+		(cond
+			((= fmt "MM/DD/YYYY")
+				(strcat mo "/" dy "/" yr)
+			)
+			((= fmt "YYYY/MM/DD")
+				(strcat yr "/" mo "/" dy)
+			)
+			((= fmt "MM-DD-YYYY")
+				(strcat mo "-" dy "-" yr)
+			)
+			((= fmt "YYYY-MM-DD")
+				(strcat yr "-" mo "-" dy)
+			)
+			((= fmt "MM/DD/YY")
+				(strcat mo "/" dy "/" (substr yr 3 2))
+			)
+			((= fmt "MM-DD-YY")
+				(strcat mo "-" dy "-" (substr yr 3 2))
+			)
+			((= fmt "YYYYMMDD")
+				(strcat yr mo dy)
+			)
+			((= fmt "YYMMDD")
+				(strcat (substr yr 3 2) mo dy)
+			)
+			((= fmt "MMDDYY")
+				(strcat mo dy (substr yr 3 2))
+			)
+			((= fmt "DDMMMYYYY")
+				(setq mos (list "JAN" "FEB" "MAR" "APR" "MAY" "JUN" "JUL" "AUG" "SEP" "OCT" "NOV" "DEC"))
+				(strcat dy (nth (1- (atoi mo)) mos) yr)
+			)
+			( t
+				"" ;; ALLOWS A TIME STAMP ONLY RETURN
+			)
+		)
+	)
+	(vl-string-left-trim " " (strcat bas (if (> (strlen tim) 0) (strcat " " tim) "")))
+)
+;; RETURNS STRING DATE (AND TIME IF INCLUDED) BASED ON PASSED FORMAT, ELSE EMPTY STRING
+;; [ fmt ]	== FORMAT STRING THAT MATCHES INNER CODED FORMATS
+;; ' fmt ' CAN INCLUDE A TIME STAMP, EITHER "HH:MM" FOR 24 HOUR CLOCK, OR "hh:mm" FOR 12 HOUR CLOCK
+;; EXAMPLES: "MM-DD-YYYY" -> "01-15-2026"; "MM-DD-YYYY HH:MM" -> "01-15-2026 16:30"; "MM-DD-YYYY hh:mm" -> "01-15-2026 04:30 PM"
 
 
 
@@ -383,6 +503,9 @@
 (defun std:FlattenList2D ( lst )
 	(mapcar '(lambda ( p ) (list (car p) (cadr p))) lst)
 )
+; (defun std:FlattenList2D ( lst )
+	; (apply 'append (mapcar '(lambda ( p ) (list (car p) (cadr p))) lst))
+; )
 ;; RETURNS A FLATTENED LIST OF VALUES SPECIFICALLY 2D VALUES (X, Y)
 ;; [ lst ] == A LIST OF POINT VALUES -> (LIST '(10.0 10.0 0.0) '(10.0 20.0 0.0) '(20.0 30.0 0.0)) RETURN VALUE -> (10.0 10.0 10.0 20.0 20.0 30.0)
 
