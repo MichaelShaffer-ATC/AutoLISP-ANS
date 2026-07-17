@@ -48,7 +48,7 @@
 	)
 	;; SETS TOOLPALETTE PATH SYSTEM VARIABLE
 	
-	(setq dir (strcat (getenv "USERPROFILE") "\\ANS Geo\\ANS Geo Central - Documents\\Structural\\CAD\\Details\\Tool Palettes\\"))
+	(setq dir "C:\\_ACC\\ACCDocs\\ANS Team\\ANS_STD\\Project Files\\04_DISCIPLINES\\05_STRUCTURAL\\01_CAD_Standards\\06_Tool_Palettes\\")
 	(setq doc-loc (vl-registry-read "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders" "Personal"))
 	
 	(cond
@@ -85,3 +85,7 @@
 ;; NEED FULL PATH TO TOOL PALETTES
 ;; WOULD ALSO BE BENEFICIAL TO HAVE PALETTES ORGANIZED INTO GROUPS NOT JUST FOR CIVIL BUT FOR STRUCTURAL AS WELL
 ;; C:\Users\MichaelShaffer\AppData\Roaming\Autodesk\AutoCAD 2026\R25.1\enu\Support\ToolPalette\Palettes
+
+
+(Load:DescriptionLog "RELOADTOOLPALETTES / RLTP" "Creates tool palette at C:\\ location")
+;; MIGHT WANT TO MAKE THIS AN ANS GLOBAL FUNCTION FOR ALL TEAMS IN THE FUTURE
