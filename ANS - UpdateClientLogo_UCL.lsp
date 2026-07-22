@@ -159,7 +159,7 @@
 	)
 	;; CONFIRMS IF THE PASSED BLOCK CONTAINS TEXT "CLIENT LOGO" ON A SPECIFIC NON-PLOT LAYER AND RETURNS T IF THE TITLE BLOCK UPDATE WAS SUCCESSFUL; ELSE NIL
 	
-	(defun InsertLogoBlock ( def clnt ins / pth src blks tgt arr err )
+	(defun InsertLogoBlock ( def clnt ins / pth src blks tgt arr err ref dic tbl )
 		(setq pth (cdr (assoc clnt bmap)))
 		(setq err t) ;; PRESET ERROR VARIABLE UNTIL ALL CHECKS ARE PASSED
 		(cond
@@ -180,14 +180,25 @@
 				
 				(setq err
 					(vl-catch-all-error-p
-						(vl-catch-all-apply 'vla-InsertBlock 
-							(list def (vlax-3d-point ins) clnt 1.0 1.0 1.0 0.0)
+						(setq ref (vl-catch-all-apply 'vla-InsertBlock 
+								(list def (vlax-3d-point ins) clnt 1.0 1.0 1.0 0.0)
+							)
 						)
 					)
 				) ;; ATTEMPT THE INSERTION AND SAVE THE ERROR STATE (T OR NIL)
 				
 				(if err
 					(prompt "\nError: Insertion of client logo failed.")
+					(vl-catch-all-apply
+						'(lambda ( )
+							(setq dic (vla-getextensiondictionary def))
+							(setq tbl (vla-addobject dic "ACAD_SORTENTS" "AcDbSortentsTable"))
+							(setq arr (vlax-make-safearray vlax-vbobject '(0 . 0)))
+							(vlax-safearray-put-element arr 0 ref)
+							(vla-movetobottom tbl (vlax-make-variant arr))
+						)
+					)
+					;; MOVE IMAGE LOGO TO BACK DUE TO LAYER OVERLAPPING
 				)
 			)
 		)
