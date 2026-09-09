@@ -3,6 +3,28 @@
 ;;; GLOBAL SUBFUNCTIONS ;;;
 
 
+;;; TIME LOGGING ;;;
+
+(defun std:Runtime ( st / )
+	(if (not st)
+		(getvar "MILLISECS")
+		(- (getvar "MILLISECS") st)
+	)
+)
+;; CREATES AN ELAPSED TIME SPEC OF A RUNNING FUNCTION
+;; THIS COMMAND WILL BE USED ON ALL CALLABLE FUNCTIONS TO MEASURE RUNTIMES
+;; USE:
+; (defun c:TEST_FUNCTION ( / st lap )
+	; (setq st (std:Runtime nil))
+	; (TEST_FUNCTION) 										;; Main function call
+	; (setq lap (std:Runtime st))
+	; (LOG_TO_METRICS "info" "test message" lap nil)
+	; (FLUSH_LOGS)
+; )
+;;; THIS IS THE PROPOSED SIGNATURE FORMATTING FOR ALL CALLABLE FUNCTIONS ;;;
+;; [ st ]	== START TIME VALUE (FLOAT): IF NOT SET, RETURNS CURRENT TIME "MILLISECS", ELSE RETURNS DIFFERENCE FROM CURRENT TIME AND PASSED TIME ARGUMENT
+
+
 
 ;;; MATH FUNCTIONS ;;;
 
@@ -71,7 +93,7 @@
 ;; [ mlt ]	== BOOLEAN VALUE, T TO ALLOW MULTIPLE SELECTIONS; NIL TO ALLOW ONLY A SINGLE SELECTION
 
 
-(defun std:DynamicToggleBox ( msg lst flg / dcl tmp des dch rtn key keys rtn )
+(defun std:DynamicToggleBox ( msg lst flg / dcl tmp des dch rtn key keys val )
 	(setq dcl
 		(list
 			"// Temporary DCL file;"
@@ -84,16 +106,22 @@
 	)
 	;; DCL HEADER
 	
-	(setq flg (if flg "1" "0"))
-    (foreach itm lst
+	(foreach itm lst
 		(setq
+			;; EVALUATE PRE-CHECKED STATE FOR THIS INDIVIDUAL ITEM:
+			;; 1. If flg is a list -> check if itm exists in flg (sets individual value)
+			;; 2. If flg is boolean -> use "1" for T, "0" for nil (sets all values)
+			val (if (listp flg)
+					(if (member itm flg) "1" "0")
+					(if flg "1" "0")
+				)
 			key (strcat "toggle_" (vl-string-subst "_" " " itm))
 			dcl (append dcl
 					(list
 						"		: toggle {"
 				(strcat "			key = \"" key "\";")
 				(strcat "			label = \"" itm "\";")
-				(strcat	"			value = \"" flg "\";")
+				(strcat	"			value = \"" val "\";")
 						"		}"
 					)
 				)
@@ -142,20 +170,20 @@
 				(setq rtn (vl-remove-if-not '(lambda ( x ) (= "1" (cdr x))) (mapcar 'cons lst rtn)))
 			)
 		)
-        (prompt "\nError loading dialog box.")
-    )
-    (if (> dch 0)
+		(prompt "\nError loading dialog box.")
+	)
+	(if (> dch 0)
 		(unload_dialog dch)
 	)
-    (if (and tmp (setq tmp (findfile tmp)))
+	(if (and tmp (setq tmp (findfile tmp)))
 		(vl-file-delete tmp)
 	)
-    (mapcar 'car rtn)
+	(mapcar 'car rtn)
 )
 ;; CREATES A DCL POP-UP BOX OF SELECTABLE TOGGLE ITEMS AND RETURNS USER SELECTED ITEMS AS A LIST
 ;; [ msg ]	== STRING VALUE FOR THE TOGGLE BOX TITLE / DESCRIPTION
-;; [ lst ]	== LIST OF ITEMS TO ADD TO THE TOGGLE BOX DCL
-;; [ flg ]	== IF T, INITIALIZES ALL TOGGLES TO BE CHECKED; IF NIL, TOGGLES ARE INITIALIZED TO UN-CHECKED
+;; [ lst ]	== LIST OF STRINGS TO DISPLAY AS TOGGLE ITEMS
+;; [ flg ]	== BOOLEAN OR LIST: IF T, ALL ITEMS CHECKED; IF NIL, ALL UNCHECKED; IF A LIST, ONLY MATCHING ITEMS IN 'lst' ARE CHECKED
 
 
 
@@ -294,6 +322,53 @@
 )
 ;; RELEASES PASSED COM OBJECTS WITHIN A LIST
 ;; [ objs ]	== LIST OF COM OBJECTS TO RELEASE FROM MEMORY
+
+
+(defun std:CopyDBXObjects ( dbx bit lyrs scl crds / objs tmat lst out res )
+	(if (or (null scl) (<= scl 0)) (setq scl 1))
+	(setq tmat
+		(vlax-tmatrix
+			(list
+				(list scl 0 0 (car crds))
+				(list 0 scl 0 (cadr crds))
+				(list 0 0 scl (last crds))
+				(list 0 0 0 1)
+			)
+		)
+	)
+	(if (and bit (/= bit 0))
+		(progn
+			(if (= (logand 1 bit) 1) (setq objs (append (list "AcDbLine" "AcDbPolyline" "AcDbPolyline2d" "AcDbCircle" "AcDbArc" "AcDbEllipse" "AcDbSpline" "AcDbHatch") objs)))
+			(if (= (logand 2 bit) 2) (setq objs (append (list "AcDbRotatedDimension" "AcDbAlignedDimension" "AcDbArcDimension" "AcDbRadialDimension" "AcDbLeader" "AcDbMLeader") objs)))
+			(if (= (logand 4 bit) 4) (setq objs (append (list "AcDbBlockReference") objs)))
+			(if (= (logand 8 bit) 8) (setq objs (append (list "AcDbPoint" "AcDbRay" "AcDbXline") objs)))
+		)
+	)
+	(vlax-for itm (vla-get-modelspace dbx)
+		(if (and
+				(or (null bit) (= bit 0) (member (vla-get-objectname itm) objs))
+				(or (null lyrs) (wcmatch (strcase (vla-get-layer itm)) (strcase lyrs)))
+			)
+			(setq lst (cons itm lst))
+		)
+	)
+	(if (and lst (setq out (vlax-invoke dbx 'CopyObjects lst (vla-get-modelspace (vla-get-activedocument (vlax-get-acad-object))))))
+		(foreach itm out
+			(setq res (vl-catch-all-apply 'vla-transformby (list itm tmat)))
+			(if (vl-catch-all-error-p res)
+				(princ (strcat "\nSkipped untransformable object: " (vla-get-objectname itm)))
+			)
+		)
+	)
+)
+;; COPIES LINEWORK FROM AN EXTERNAL DRAWING BASED ON OBJECT TYPE AND/OR LAYER TO SPECIFIED COORDINATES WITHIN THE CURRENT DRAWING
+;; [ dbx ]	== EXTERNAL DATABASE EXTENSION OBJECT
+;; [ bit ]	== INTEGER BIT SET FOR VALID TARGET OBJECTS 0 -> 15, 0 INCLUDES ALL OBJECTS, 1 = GEOMETRY, 2 = ANNOTATIONS, 4 = BLOCKS / HATCHES, 8 = CONSTRUCTION LINES / POINTS
+;; [ lyrs ]	== PATTERN STRING FOR MATCHING LAYERS IE; "Layer*,0,*New*" | INCLUDES LAYER "0", ANY LAYER THAT STARTS WITH "Layer" AND ANY LAYER THAT CONTAINS "New"
+;; [ scl ]	== INTEGER VALUE FOR SCALE FOR TARGET OBJECTS INTO CURRENT DRAWING, NIL IF SCALE NOT TO BE APPLIED
+;; [ crds ]	== LIST OF COORDINATES FOR OBJECTS TO BE COPIED TO IN THE CURRENT DRAWING
+;; EXAMPLE USAGE: (setq dbx (std:CreateObjectDBX dir)) (vla-open dbx (strcat dir "\\" fn) :vlax-true) (std:CopyDBXObjects dbx 7 nil nil '(0 0 0))
+;; NOTE: THIS FUNCTION DOES NOT PRE-CHECK IF DBX HAS BEEN SET BEFORE INVOKING COPYOBJECTS; ERROR HANDLING MUST BE DONE BEFORE THIS FUNCTION IS USED
 
 
 (defun std:GetCustomPropertyValue ( key / dwp val )
