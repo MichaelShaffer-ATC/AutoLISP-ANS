@@ -11,7 +11,7 @@
 		;Functions
 		*error*
 		InitializeBlockRegistry
-		GetTitleBlockRef UpdateTitleBlockDefinition InsertLogoBlock PreviousLogoRemoved
+		GetTitleBlockRef UpdateTitleBlockDefinition InsertLogoBlock PreviousLogoRemoved PurgeBlockDef
 		EditTitleBlockInternal EditTitleBlockExternal IsExternalReferenceLocked
 		;Variables
 		bmap clnt
@@ -208,13 +208,16 @@
 	;; INSERTS LOGO BLOCK FROM SOURCE LOCATION BASED ON PASSED NAME 'CLNT' INTO THE BLOCK DEFINITION FOR THE PASSED TITLE BLOCK
 	;; USES PUBLIC VARIABLES 'bmap' AND 'clnt' TO GRAB THE CORRECT LOGO PATH
 	
-	(defun PreviousLogoRemoved ( def ins / lgo bpt err )
+	(defun PreviousLogoRemoved ( def ins / lgo bnm bpt err )
 		(vlax-for obj def
 			(if (and (null lgo) (= (vla-get-objectname obj) "AcDbBlockReference"))
 				(progn
 					(setq bpt (std:Variant->List (vla-get-insertionpoint obj)))
 					(if (equal ins bpt 0.001)
-						(setq lgo obj)
+						(setq
+							lgo obj
+							bnm (vla-get-effectivename obj)
+						)
 					)
 				)
 			)
@@ -224,7 +227,10 @@
 				(setq err (vl-catch-all-error-p (vl-catch-all-apply 'vla-delete (list lgo))))
 				(if err
 					(prompt "\nError: Failed to delete previous logo from title block.")
-					(prompt "\nSuccess: Previous logo block definition removed.")
+					(progn
+						(prompt "\nSuccess: Previous logo block definition removed.")
+						(PurgeBlockDef (vla-get-document def) bnm)
+					)
 				)
 			)
 			(progn
@@ -235,6 +241,25 @@
 		(not err)
 	)
 	;; REMOVES PREVIOUS LOGO INSERTION IF IT EXISTS, RETURNS T IF SUCCESSFUL OR IF NO BLOCK WAS FOUND WITHIN INSERTION BOUNDRY; RETURNS NIL IF DELETE FAILS
+	
+	(defun PurgeBlockDef ( doc bnm / blk )
+		(setq blk (vl-catch-all-apply 'vla-item (list (vla-get-blocks doc) bnm)))
+		(cond
+			( (vl-catch-all-error-p blk)
+				(prompt "\nNotice: Logo block definition not found in drawing.")
+				nil
+			)
+			( (vl-catch-all-error-p (vl-catch-all-apply 'vla-delete (list blk)))
+				(prompt "\nNotice: Logo block still referenced elsewhere. Requires manual purge.")
+				nil
+			)
+			( t
+				(prompt "\nSuccess: Previous logo block purged from source drawing.")
+				t
+			)
+		)
+	)
+	;; PURGES OUT LINGERING LOGO BLOCK FROM DRAWING SOURCE AFTER DELETION
 	
 	(defun GetTitleBlockRef ( doc / col bnm def res success )
 		(setq col (vla-get-blocks doc))
