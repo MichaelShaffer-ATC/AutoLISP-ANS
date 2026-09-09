@@ -83,7 +83,10 @@
 	
 	(setq usrs_list
 		(list
-			"MichaelShaffer"
+			"michael.shafferXTMHX"
+			"samuel.fuentesNGM96"
+			"francisco.torresLPT7Y"
+			"carlos.castroZXDW"
 		)
 	)
 	
@@ -141,7 +144,7 @@
 	;; OPENS FILE EXPLORER TO PASSED DIRECTORY, SIMILAR TO USING BUILT-IN 'STARTAPP' FUNCTION
 	;; FUNCTION ALWAYS RETURNS NIL, WILL OPEN EXPLORER WINDOW IF SUCCESSFUL
 	
-	(if (not (member (strcase (getvar "LOGINNAME")) (mapcar '(lambda ( n ) (strcase n)) usrs_list)))
+	(if (not (member (strcase (getvar "ONLINEUSERNAME")) (mapcar '(lambda ( n ) (strcase n)) usrs_list)))
 		(prompt "You do not have permission to run this command. Contact CAD admin for permission.")
 		(progn
 			(setq ttl "lsp2fas")
