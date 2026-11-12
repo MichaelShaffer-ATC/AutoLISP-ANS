@@ -42,6 +42,7 @@
 	;; FOR FUTURE REFERENCE TO LOAD .DLL FILES WHEN APPLICABLE
 	
 	(if Load:FileName (setq Load:FileName nil)) ;; GLOBAL VARIABLE FOR DESCRIPTION LOGGER
+	(Load:SetSystemVariables)
 	
 	(princ)
 )
